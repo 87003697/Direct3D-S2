@@ -230,7 +230,7 @@ class Direct3DS2Pipeline(object):
             mode: str = 'dense', # 'dense', 'sparse512' or 'sparse1024
             remove_interior: bool = False,
             mc_threshold: float = 0.02,
-            refine_method: str = "loop"):
+            refine_method: str = "batch"):
         
         do_classifier_free_guidance = guidance_scale > 0
         if mode == 'dense':
@@ -325,7 +325,7 @@ class Direct3DS2Pipeline(object):
         simplify_ratio: float = 0.95,
         mc_threshold: float = 0.2,
         remove_interior: bool = True,
-        refine_method: str = "loop"):
+        refine_method: str = "batch"):
 
         image = self.prepare_image(image)
         

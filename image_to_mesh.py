@@ -44,7 +44,7 @@ def image_to_mesh_512(
     simplify: bool = True,
     simplify_ratio: float = 0.95,
     mc_threshold: float = 0.2,
-    refine_method: str = "loop",
+    refine_method: str = "batch",
     device: str = "cuda:0",
 ) -> str:
     """Run image-to-mesh at 512 resolution only and save OBJ.
@@ -89,7 +89,7 @@ def main():
     parser.add_argument("--simplify", action="store_true", help="Enable mesh simplification")
     parser.add_argument("--simplify_ratio", type=float, default=0.95, help="Faces reduction ratio if simplify enabled")
     parser.add_argument("--mc_threshold", type=float, default=0.2, help="Marching cubes threshold")
-    parser.add_argument("--refine_method", type=str, default="loop", choices=["loop","batch"], help="Refine method: loop or batch")
+    parser.add_argument("--refine_method", type=str, default="batch", choices=["loop","batch"], help="Refine method: loop or batch")
 
     args = parser.parse_args()
 

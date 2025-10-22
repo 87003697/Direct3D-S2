@@ -112,7 +112,7 @@ class Voxel_RefinerXL(nn.Module):
             reconst_x,
             feat, 
             mc_threshold=0,
-            method: str = "loop",
+            method: str = "batch",
         ):
         batch_size = int(reconst_x.coords[..., 0].max()) + 1
         sparse_sdf, sparse_index = reconst_x.feats, reconst_x.coords
@@ -270,7 +270,7 @@ class Voxel_RefinerXL_sign(nn.Module):
              reconst_x=None,
              feat=None, 
              mc_threshold=0,
-             method: str = "loop",
+             method: str = "batch",
         ):
         batch_size = int(reconst_x.coords[..., 0].max()) + 1
         sparse_sdf, sparse_index = reconst_x.feats, reconst_x.coords
