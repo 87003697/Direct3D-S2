@@ -177,22 +177,29 @@ class Voxel_RefinerXL(nn.Module):
             feat_patches = torch.stack(feat_list, dim=0)
 
             P, N = sdf_patches.shape[0], sdf_patches.shape[1]
-            sdf_b = sdf_patches.reshape(P * N, 1, patch_size, patch_size, patch_size)
-            feat_b = feat_patches.reshape(P * N, feat_patches.shape[2], patch_size, patch_size, patch_size)
+            micro = 9
+            for p0 in range(0, P, micro):
+                p1 = min(p0 + micro, P)
+                sdf_chunk = sdf_patches[p0:p1]  # (m,N,1,ps,ps,ps)
+                feat_chunk = feat_patches[p0:p1]  # (m,N,C,ps,ps,ps)
 
-            inputs = self.conv_in(sdf_b)
-            feat_b = self.latent_mlp(feat_b.permute(0,2,3,4,1)).permute(0,4,1,2,3)
-            inputs = torch.cat([inputs, feat_b], dim=1)
-            mid_feat = self.unet3d1(inputs)
-            mid_feat = adaptive_block(mid_feat, self.adaptive_conv1)
-            mid_feat = self.mid_conv(mid_feat)
-            mid_feat = adaptive_block(mid_feat, self.adaptive_conv2)
-            final_feat = self.conv_out(mid_feat)
-            final_feat = adaptive_block(final_feat, self.adaptive_conv3, weights_=mid_feat)
-            output_b = F.tanh(final_feat)
+                m = sdf_chunk.shape[0]
+                sdf_b = sdf_chunk.reshape(m * N, 1, patch_size, patch_size, patch_size)
+                feat_b = feat_chunk.reshape(m * N, feat_chunk.shape[2], patch_size, patch_size, patch_size)
 
-            for i in range(P):
-                patchs.append(output_b[i * N:(i + 1) * N])
+                inputs = self.conv_in(sdf_b)
+                feat_b = self.latent_mlp(feat_b.permute(0,2,3,4,1)).permute(0,4,1,2,3)
+                inputs = torch.cat([inputs, feat_b], dim=1)
+                mid_feat = self.unet3d1(inputs)
+                mid_feat = adaptive_block(mid_feat, self.adaptive_conv1)
+                mid_feat = self.mid_conv(mid_feat)
+                mid_feat = adaptive_block(mid_feat, self.adaptive_conv2)
+                final_feat = self.conv_out(mid_feat)
+                final_feat = adaptive_block(final_feat, self.adaptive_conv3, weights_=mid_feat)
+                output_b = F.tanh(final_feat)
+
+                for i in range(m):
+                    patchs.append(output_b[i * N:(i + 1) * N])
         weights = torch.linspace(0, 1, steps=32, device=device, dtype=dtype)
         lines=[]
         for i in range(9):
