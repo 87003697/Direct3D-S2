@@ -229,7 +229,8 @@ class Direct3DS2Pipeline(object):
             latent_index: torch.Tensor = None,
             mode: str = 'dense', # 'dense', 'sparse512' or 'sparse1024
             remove_interior: bool = False,
-            mc_threshold: float = 0.02):
+            mc_threshold: float = 0.02,
+            refine_method: str = "loop"):
         
         do_classifier_free_guidance = guidance_scale > 0
         if mode == 'dense':
@@ -305,9 +306,9 @@ class Direct3DS2Pipeline(object):
             del latents, noise_pred, noise_pred_cond, noise_pred_uncond, x_input, cond, uncond
             torch.cuda.empty_cache()
             if mode == 'sparse512':
-                outputs = self.refiner.run(*outputs, mc_threshold=mc_threshold*2.0)
+                outputs = self.refiner.run(*outputs, mc_threshold=mc_threshold*2.0, method=refine_method)
             elif mode == 'sparse1024':
-                outputs = self.refiner_1024.run(*outputs, mc_threshold=mc_threshold)
+                outputs = self.refiner_1024.run(*outputs, mc_threshold=mc_threshold, method=refine_method)
 
         return outputs
     
@@ -323,7 +324,8 @@ class Direct3DS2Pipeline(object):
         remesh: bool = False,
         simplify_ratio: float = 0.95,
         mc_threshold: float = 0.2,
-        remove_interior: bool = True):
+        remove_interior: bool = True,
+        refine_method: str = "loop"):
 
         image = self.prepare_image(image)
         
@@ -352,7 +354,7 @@ class Direct3DS2Pipeline(object):
                                 self.sparse_image_encoder, self.sparse_scheduler_1024, 
                                 generator=generator, mode='sparse1024', 
                                 mc_threshold=mc_threshold, latent_index=latent_index, 
-                                remove_interior=remove_interior, **sparse_1024_sampler_params)[0]
+                                remove_interior=remove_interior, refine_method=refine_method, **sparse_1024_sampler_params)[0]
             
         if remesh:
             import trimesh

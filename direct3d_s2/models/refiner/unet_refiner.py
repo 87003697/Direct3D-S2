@@ -112,6 +112,7 @@ class Voxel_RefinerXL(nn.Module):
             reconst_x,
             feat, 
             mc_threshold=0,
+            method: str = "loop",
         ):
         batch_size = int(reconst_x.coords[..., 0].max()) + 1
         sparse_sdf, sparse_index = reconst_x.feats, reconst_x.coords
@@ -141,26 +142,57 @@ class Voxel_RefinerXL(nn.Module):
         sdfs = sdfs.to(dtype)
         feats = feats.to(dtype)
         patchs=[]
-        for i in range(step):
-            for j in range(step):
-                for k in tqdm(range(step)):
-                    sdf = sdfs[:, :, stride * i: stride * i + patch_size,
-                               stride * j: stride * j + patch_size,
-                               stride * k: stride * k + patch_size]
-                    crop_feats = feats[:, :, stride * i: stride * i + patch_size, 
-                                       stride * j: stride * j + patch_size, 
-                                       stride * k: stride * k + patch_size]
-                    inputs = self.conv_in(sdf)
-                    crop_feats = self.latent_mlp(crop_feats.permute(0,2,3,4,1)).permute(0,4,1,2,3)
-                    inputs = torch.cat([inputs, crop_feats],dim=1)
-                    mid_feat = self.unet3d1(inputs)  
-                    mid_feat = adaptive_block(mid_feat, self.adaptive_conv1)
-                    mid_feat = self.mid_conv(mid_feat)
-                    mid_feat = adaptive_block(mid_feat, self.adaptive_conv2)
-                    final_feat = self.conv_out(mid_feat)
-                    final_feat = adaptive_block(final_feat, self.adaptive_conv3, weights_=mid_feat)
-                    output = F.tanh(final_feat)
-                    patchs.append(output)
+        if method == "loop":
+            for i in range(step):
+                for j in range(step):
+                    for k in range(step):
+                        sdf = sdfs[:, :, stride * i: stride * i + patch_size,
+                                   stride * j: stride * j + patch_size,
+                                   stride * k: stride * k + patch_size]
+                        crop_feats = feats[:, :, stride * i: stride * i + patch_size, 
+                                           stride * j: stride * j + patch_size, 
+                                           stride * k: stride * k + patch_size]
+                        inputs = self.conv_in(sdf)
+                        crop_feats = self.latent_mlp(crop_feats.permute(0,2,3,4,1)).permute(0,4,1,2,3)
+                        inputs = torch.cat([inputs, crop_feats],dim=1)
+                        mid_feat = self.unet3d1(inputs)  
+                        mid_feat = adaptive_block(mid_feat, self.adaptive_conv1)
+                        mid_feat = self.mid_conv(mid_feat)
+                        mid_feat = adaptive_block(mid_feat, self.adaptive_conv2)
+                        final_feat = self.conv_out(mid_feat)
+                        final_feat = adaptive_block(final_feat, self.adaptive_conv3, weights_=mid_feat)
+                        output = F.tanh(final_feat)
+                        patchs.append(output)
+        else:
+            starts = [stride * t for t in range(step)]
+            coords = [(x, y, z) for x in starts for y in starts for z in starts]
+
+            sdf_list = []
+            feat_list = []
+            for (x, y, z) in coords:
+                sdf_list.append(sdfs[:, :, x:x+patch_size, y:y+patch_size, z:z+patch_size])
+                feat_list.append(feats[:, :, x:x+patch_size, y:y+patch_size, z:z+patch_size])
+
+            sdf_patches = torch.stack(sdf_list, dim=0)
+            feat_patches = torch.stack(feat_list, dim=0)
+
+            P, N = sdf_patches.shape[0], sdf_patches.shape[1]
+            sdf_b = sdf_patches.reshape(P * N, 1, patch_size, patch_size, patch_size)
+            feat_b = feat_patches.reshape(P * N, feat_patches.shape[2], patch_size, patch_size, patch_size)
+
+            inputs = self.conv_in(sdf_b)
+            feat_b = self.latent_mlp(feat_b.permute(0,2,3,4,1)).permute(0,4,1,2,3)
+            inputs = torch.cat([inputs, feat_b], dim=1)
+            mid_feat = self.unet3d1(inputs)
+            mid_feat = adaptive_block(mid_feat, self.adaptive_conv1)
+            mid_feat = self.mid_conv(mid_feat)
+            mid_feat = adaptive_block(mid_feat, self.adaptive_conv2)
+            final_feat = self.conv_out(mid_feat)
+            final_feat = adaptive_block(final_feat, self.adaptive_conv3, weights_=mid_feat)
+            output_b = F.tanh(final_feat)
+
+            for i in range(P):
+                patchs.append(output_b[i * N:(i + 1) * N])
         weights = torch.linspace(0, 1, steps=32, device=device, dtype=dtype)
         lines=[]
         for i in range(9):
@@ -238,6 +270,7 @@ class Voxel_RefinerXL_sign(nn.Module):
              reconst_x=None,
              feat=None, 
              mc_threshold=0,
+             method: str = "loop",
         ):
         batch_size = int(reconst_x.coords[..., 0].max()) + 1
         sparse_sdf, sparse_index = reconst_x.feats, reconst_x.coords
