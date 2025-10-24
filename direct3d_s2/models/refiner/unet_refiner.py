@@ -177,7 +177,7 @@ class Voxel_RefinerXL(nn.Module):
             feat_patches = torch.stack(feat_list, dim=0)
 
             P, N = sdf_patches.shape[0], sdf_patches.shape[1]
-            micro = 9
+            micro = 3
             for p0 in range(0, P, micro):
                 p1 = min(p0 + micro, P)
                 sdf_chunk = sdf_patches[p0:p1]  # (m,N,1,ps,ps,ps)
